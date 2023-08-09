@@ -6,3 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+log = "0.4.19"
+unicode_titlecase = "2.2.0"
+
+[dev-dependencies]
+rstest = "0.18.1"
