@@ -7,47 +7,151 @@
 #![warn(unused_qualifications)]
 #![warn(variant_size_differences)]
 #![forbid(unsafe_code)]
+#![warn(unused_import_braces)]
+#![warn(unused_results)]
+#![warn(unused_lifetimes)]
+#![warn(unused)]
 #![warn(missing_docs)]
 #![allow(clippy::multiple_crate_versions)]
-//! Decompose a compound word into its constituents.
+#![doc = include_str!("../README.md")]
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, error::Error, fmt::Display};
 
+use bitflags::bitflags;
 use log::trace;
 use unicode_titlecase::StrTitleCase;
 
-/// Decompose a compound word into its constituents.
-pub fn decompound<T: AsRef<str>>(
-    word: T,
-    is_valid_single_word: &impl Fn(&str) -> bool,
-    titlecase_suffix: bool,
-) -> Option<Vec<String>> {
-    let word = word.as_ref();
-    let mut constituents = vec![];
+/// Error cases for the [`Result`] of [`decompound`].
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DecompositionError {
+    /// Result was *not* a compound word, but a valid *single* word.
+    /// Whether this is a hard error is subjective: in any case, *decomposition failed*.
+    SingleWord(String),
+    /// Nothing valid was found (neither a compound word nor a single, non-compound
+    /// word).
+    NothingValid,
+}
 
-    if _is_compound_word(
-        word,
-        is_valid_single_word,
-        titlecase_suffix,
-        &mut constituents,
-    ) {
-        debug_assert!(
-            !constituents.is_empty(),
-            "Compound word should have constituents"
-        );
-
-        Some(constituents)
-    } else {
-        None
+impl Display for DecompositionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DecompositionError::SingleWord(word) => {
+                write!(f, "Not a compound, but valid single word: {word}")
+            }
+            DecompositionError::NothingValid => write!(f, "No valid decomposition found"),
+        }
     }
 }
 
-fn _is_compound_word(
-    word: &str,
+impl Error for DecompositionError {}
+
+bitflags! {
+    /// Options for [`decompound`], configuring its search. Available options are found
+    /// below, as `pub const`s.
+    ///
+    /// Use [`DecompositionOptions::empty()`] to set *no* options. See the [`bitflags`
+    /// docs](https://docs.rs/bitflags/latest/bitflags/#working-with-flags-values) for
+    /// more.
+    #[derive(Clone)]
+    pub struct DecompositionOptions: u32 {
+        /// *In addition* to the original suffix being tried, try its titlecased version
+        /// as well. Does nothing if suffix is already titlecased.
+        const TRY_TITLECASE_SUFFIX = 1;
+        /// Treat hyphenated words as compound words. Its constituents will be returned
+        /// as a collection of *all* constituents of the hyphenated word, *without* any
+        /// hyphens.
+        const SPLIT_HYPHENATED = 1 << 1;
+    }
+}
+
+impl AsRef<DecompositionOptions> for DecompositionOptions {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}
+
+/// [`Result`] of a [`decompound`] operation.
+pub type DecompositionResult = Result<Vec<String>, DecompositionError>;
+
+/// Docs...
+///
+/// ## Errors
+///
+/// ...
+pub fn decompound(
+    word: impl AsRef<str>,
     is_valid_single_word: &impl Fn(&str) -> bool,
-    titlecase_suffix: bool,
+    options: impl AsRef<DecompositionOptions>,
+) -> DecompositionResult {
+    let mut constituents = vec![];
+    let word = word.as_ref();
+    let options = options.as_ref();
+
+    if options.contains(DecompositionOptions::SPLIT_HYPHENATED) {
+        // let mut n = 0;
+        for subword in word.split('-') {
+            // n += 1;
+
+            match decompound(
+                subword,
+                is_valid_single_word,
+                // Avoid reentry on recursive calls
+                options.clone() - DecompositionOptions::SPLIT_HYPHENATED,
+            ) {
+                Ok(words) => constituents.extend(words),
+                // Actually allowed in this mode: words like 'string-concatenation' are
+                // valid, where each is only a single word.
+                Err(DecompositionError::SingleWord(word)) => constituents.push(word),
+                Err(e) => return Err(e),
+            };
+        }
+
+        // let had_hyphens = n > 1;
+        // if had_hyphens {
+        //     debug_assert!(
+        //         !constituents.is_empty(),
+        //         "Hyphenated word with all-valid subwords must have constituents"
+        //     );
+        // }
+
+        return match constituents.len() {
+            0 => Err(DecompositionError::NothingValid),
+            1 => Err(DecompositionError::SingleWord(word.to_owned())),
+            _ => Ok(constituents),
+        };
+
+        // if constituents.len() == 1 {
+        //     return Err(DecompositionError::SingleWord(word.to_owned()));
+        // }
+
+        // return Ok(constituents);
+    }
+
+    if is_valid_compound_word(word, is_valid_single_word, options, &mut constituents) {
+        debug_assert!(
+            !constituents.is_empty(),
+            "Compound word must have constituents"
+        );
+
+        Ok(constituents)
+    } else {
+        trace!("Word is not a valid compound word");
+
+        if is_valid_single_word(word) {
+            Err(DecompositionError::SingleWord(word.to_owned()))
+        } else {
+            Err(DecompositionError::NothingValid)
+        }
+    }
+}
+
+fn is_valid_compound_word(
+    word: impl AsRef<str>,
+    is_valid_single_word: &impl Fn(&str) -> bool,
+    options: &DecompositionOptions,
     constituents: &mut Vec<String>,
 ) -> bool {
+    let word = word.as_ref();
     trace!("Checking if word is valid compound word: '{}'", word);
 
     // Greedily fetch the longest possible prefix. Otherwise, we short-circuit and
@@ -71,65 +175,46 @@ fn _is_compound_word(
         split
     };
 
-    match greediest_split {
-        Some((prefix, suffix)) => {
-            constituents.push(prefix.to_owned());
+    if let Some((prefix, suffix)) = greediest_split {
+        constituents.push(prefix.to_owned());
 
-            trace!(
-                "Prefix '{}' found to be valid, seeing if suffix '{}' is valid.",
-                prefix,
-                suffix
-            );
+        trace!(
+            "Prefix '{}' found to be valid, seeing if suffix '{}' is valid.",
+            prefix,
+            suffix
+        );
 
-            let suffix_candidates = {
-                // Dedupe so no unnecessary work is done, but keep order for determinism
-                let mut set = BTreeSet::from_iter(vec![suffix.to_owned()]);
+        let suffix_candidates = {
+            // Dedupe so no unnecessary work is done, but keep order for determinism
+            let mut set = BTreeSet::from_iter(vec![suffix.to_owned()]);
 
-                if titlecase_suffix {
-                    set.insert(suffix.to_titlecase_lower_rest());
-                }
-
-                set
-            };
-
-            for suffix in suffix_candidates {
-                if is_valid_single_word(&suffix) {
-                    trace!("Suffix '{}' is valid: valid single word", suffix);
-                    constituents.push(suffix);
-                    return true;
-                }
-
-                if _is_compound_word(
-                    &suffix,
-                    is_valid_single_word,
-                    titlecase_suffix,
-                    constituents,
-                ) {
-                    trace!("Suffix '{}' is valid: valid compound word", suffix);
-                    // Not pushing to constituents, that's already been done in the
-                    // recursion step
-                    return true;
-                }
+            if options.contains(DecompositionOptions::TRY_TITLECASE_SUFFIX) {
+                let _ = set.insert(suffix.to_titlecase_lower_rest());
             }
 
-            trace!("Suffix '{}' is not valid", suffix);
-            false
-        }
-        None => {
-            if is_valid_single_word(word) {
-                trace!("Word '{}' is valid: valid single word", word);
+            set
+        };
 
-                debug_assert!(
-                    constituents.is_empty(),
-                    "Single word should be the only constituent"
-                );
-                constituents.push(word.to_owned());
+        debug_assert!(
+            !suffix_candidates.is_empty(),
+            "Suffix candidates should never be empty"
+        );
 
-                true
-            } else {
-                trace!("Word '{}' is not valid", word);
-                false
+        for suffix in suffix_candidates {
+            if is_valid_single_word(&suffix) {
+                trace!("Suffix '{}' is valid: valid single word", suffix);
+                constituents.push(suffix);
+                return true;
+            }
+
+            if is_valid_compound_word(&suffix, is_valid_single_word, options, constituents) {
+                trace!("Suffix '{}' is valid: valid compound word", suffix);
+                // Not pushing to constituents, that's already been done in the
+                // recursion step
+                return true;
             }
         }
     }
+
+    false
 }

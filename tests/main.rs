@@ -8,119 +8,169 @@ fn custom_check(word: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use decompound::decompound;
+    use decompound::{
+        decompound, DecompositionError, DecompositionError::*, DecompositionOptions as Opt,
+    };
     use rstest::rstest;
 
     use crate::{convert_to_owned, custom_check};
 
+    type DecompositionTestResult<'a> = Result<Vec<&'a str>, DecompositionError>;
+
     #[rstest]
-    #[case("A", true, Some(vec!["A"]))]
-    #[case("AB", true, Some(vec!["A", "B"]))]
-    #[case("ABC", true, Some(vec!["A", "B", "C"]))]
+    #[case("A", Opt::empty(), Err(SingleWord("A".into())))]
+    #[case("A", Opt::TRY_TITLECASE_SUFFIX, Err(SingleWord("A".into())))]
+    #[case("A", Opt::SPLIT_HYPHENATED, Err(SingleWord("A".into())))]
+    #[case("A", Opt::all(), Err(SingleWord("A".into())))]
     //
-    #[case("AA", true, Some(vec!["A", "A"]))]
-    #[case("AAA", true, Some(vec!["A", "A", "A"]))]
+    #[case("AA", Opt::empty(), Ok(vec!["A", "A"]))]
+    #[case("AA", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["A", "A"]))]
+    #[case("AA", Opt::SPLIT_HYPHENATED, Ok(vec!["A", "A"]))]
+    #[case("AA", Opt::all(), Ok(vec!["A", "A"]))]
     //
-    #[case("AA", false, Some(vec!["A", "A"]))]
-    #[case("AAA", false, Some(vec!["A", "A", "A"]))]
+    #[case("AAA", Opt::empty(), Ok(vec!["A", "A", "A"]))]
+    #[case("AAA", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["A", "A", "A"]))]
+    #[case("AAA", Opt::SPLIT_HYPHENATED, Ok(vec!["A", "A", "A"]))]
+    #[case("AAA", Opt::all(), Ok(vec!["A", "A", "A"]))]
     //
-    #[case("Aa", false, None)]
-    #[case("AaA", false, None)]
-    #[case("AaAa", false, None)]
+    #[case("AB", Opt::empty(), Ok(vec!["A", "B"]))]
+    #[case("AB", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["A", "B"]))]
+    #[case("AB", Opt::SPLIT_HYPHENATED, Ok(vec!["A", "B"]))]
+    #[case("AB", Opt::all(), Ok(vec!["A", "B"]))]
+    //
+    #[case("ABC", Opt::empty(), Ok(vec!["A", "B", "C"]))]
+    #[case("ABC", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["A", "B", "C"]))]
+    #[case("ABC", Opt::SPLIT_HYPHENATED, Ok(vec!["A", "B", "C"]))]
+    #[case("ABC", Opt::all(), Ok(vec!["A", "B", "C"]))]
+    //
+    #[case("Aa", Opt::empty(), Err(NothingValid))]
+    #[case("Aa", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["A", "A"]))]
+    #[case("Aa", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("Aa", Opt::all(), Ok(vec!["A", "A"]))]
+    //
+    #[case("AaA", Opt::empty(), Err(NothingValid))]
+    #[case("AaA", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["A", "A", "A"]))]
+    #[case("AaA", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("AaA", Opt::all(), Ok(vec!["A", "A", "A"]))]
+    //
+    #[case("AaAa", Opt::empty(), Err(NothingValid))]
+    #[case("AaAa", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["A", "A", "A", "A"]))]
+    #[case("AaAa", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("AaAa", Opt::all(), Ok(vec!["A", "A", "A", "A"]))]
     //
     // We titlecase the suffix, not the initial prefix
-    #[case("a", true, None)]
-    #[case("ab", true, None)]
-    #[case("aB", true, None)]
-    #[case("abc", true, None)]
-    #[case("aBc", true, None)]
-    #[case("abC", true, None)]
-    #[case("aBC", true, None)]
+    #[case("a", Opt::empty(), Err(NothingValid))]
+    #[case("a", Opt::TRY_TITLECASE_SUFFIX, Err(NothingValid))]
+    #[case("a", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("a", Opt::all(), Err(NothingValid))]
     //
-    #[case("Ab", true, Some(vec!["A", "B"]))]
-    #[case("Abc", true, Some(vec!["A", "B", "C"]))]
-    #[case("ABc", true, Some(vec!["A", "B", "C"]))]
-    #[case("AbC", true, Some(vec!["A", "B", "C"]))]
+    #[case("ab", Opt::empty(), Err(NothingValid))]
+    #[case("ab", Opt::TRY_TITLECASE_SUFFIX, Err(NothingValid))]
+    #[case("ab", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("ab", Opt::all(), Err(NothingValid))]
     //
-    #[case("A", false, Some(vec!["A"]))]
-    #[case("AB", false, Some(vec!["A", "B"]))]
-    #[case("ABC", false, Some(vec!["A", "B", "C"]))]
+    #[case("aB", Opt::empty(), Err(NothingValid))]
+    #[case("aB", Opt::TRY_TITLECASE_SUFFIX, Err(NothingValid))]
+    #[case("aB", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("aB", Opt::all(), Err(NothingValid))]
     //
-    #[case("a", false, None)]
-    #[case("ab", false, None)]
-    #[case("aB", false, None)]
-    #[case("abc", false, None)]
-    #[case("aBc", false, None)]
-    #[case("abC", false, None)]
-    #[case("aBC", false, None)]
+    #[case("Ab", Opt::empty(), Err(NothingValid))]
+    #[case("Ab", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["A", "B"]))]
+    #[case("Ab", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("Ab", Opt::all(), Ok(vec!["A", "B"]))]
     //
-    #[case("Ab", false, None)]
-    #[case("Abc", false, None)]
-    #[case("ABc", false, None)]
-    #[case("AbC", false, None)]
+    #[case("Abc", Opt::empty(), Err(NothingValid))]
+    #[case("Abc", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["A", "B", "C"]))]
+    #[case("Abc", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("Abc", Opt::all(), Ok(vec!["A", "B", "C"]))]
+    //
+    #[case("ABc", Opt::empty(), Err(NothingValid))]
+    #[case("ABc", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["A", "B", "C"]))]
+    #[case("ABc", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("ABc", Opt::all(), Ok(vec!["A", "B", "C"]))]
+    //
+    #[case("AbC", Opt::empty(), Err(NothingValid))]
+    #[case("AbC", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["A", "B", "C"]))]
+    #[case("AbC", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("AbC", Opt::all(), Ok(vec!["A", "B", "C"]))]
     fn test_decompound_basic(
         #[case] word: &str,
-        #[case] titlecase_suffix: bool,
-        #[case] expected: Option<Vec<&str>>,
+        #[case] options: Opt,
+        #[case] expected: DecompositionTestResult,
     ) {
         const WORDS: &[&str] = &["A", "B", "C"];
 
         assert_eq!(
-            decompound(word, &|w| WORDS.contains(&w), titlecase_suffix),
+            decompound(word, &|w| WORDS.contains(&w), options),
             expected.map(convert_to_owned)
         );
     }
 
     #[rstest]
-    #[case("Süßwasserschwimmbäder", true, Some(vec!["Süßwasser", "schwimm", "Bäder"]))]
-    #[case("Süßwasserbäderbäder", true, Some(vec!["Süßwasser", "Bäder", "Bäder"]))]
-    #[case("Mauerdübel", true, Some(vec!["Mauer", "Dübel"]))]
-    #[case("Mauerdübelkübel", true, Some(vec!["Mauer", "Dübel", "Kübel"]))]
+    #[case("Süßwasserschwimmbäder", Opt::empty(), Err(NothingValid))]
+    #[case("Süßwasserschwimmbäder", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["Süßwasser", "schwimm", "Bäder"]))]
+    #[case("Süßwasserschwimmbäder", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("Süßwasserschwimmbäder", Opt::all(), Ok(vec!["Süßwasser", "schwimm", "Bäder"]))]
     //
-    #[case("süßwasserschwimmbäder", true, None)]
+    #[case("Süßwasserbäderbäder", Opt::empty(), Err(NothingValid))]
+    #[case("Süßwasserbäderbäder", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["Süßwasser", "Bäder", "Bäder"]))]
+    #[case("Süßwasserbäderbäder", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("Süßwasserbäderbäder", Opt::all(), Ok(vec!["Süßwasser", "Bäder", "Bäder"]))]
     //
-    #[case("Süßwasserschwimm", false, Some(vec!["Süßwasser", "schwimm"]))]
-    #[case("Süßwasserbäderbäder", false, None)]
-    #[case("Mauerdübel", false, None)]
-    #[case("Mauerdübelkübel", false, None)]
-    //
-    #[case("süßwasserschwimmbäder", false, None)]
+    #[case("süßwasserschwimmbäder", Opt::empty(), Err(NothingValid))]
+    #[case("süßwasserschwimmbäder", Opt::TRY_TITLECASE_SUFFIX, Err(NothingValid))]
+    #[case("süßwasserschwimmbäder", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("süßwasserschwimmbäder", Opt::all(), Err(NothingValid))]
     //
     // Valid word but not contained in the dictionary
-    #[case("Süßwasserfisch", false, None)]
+    #[case("Süßwasserfisch", Opt::empty(), Err(NothingValid))]
+    #[case("Süßwasserfisch", Opt::TRY_TITLECASE_SUFFIX, Err(NothingValid))]
+    #[case("Süßwasserfisch", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("Süßwasserfisch", Opt::all(), Err(NothingValid))]
     //
-    // Single words are fine if contained in the dictionary
-    #[case("Mauer", true, Some(vec!["Mauer"]))]
-    #[case("Mauer", false, Some(vec!["Mauer"]))]
-    // But not if they are not
-    #[case("Haus", true, None)]
-    #[case("Haus", false, None)]
+    #[case("Bäder", Opt::empty(), Err(SingleWord("Bäder".into())))]
+    #[case("Bäder", Opt::TRY_TITLECASE_SUFFIX, Err(SingleWord("Bäder".into())))]
+    #[case("Bäder", Opt::SPLIT_HYPHENATED, Err(SingleWord("Bäder".into())))]
+    #[case("Bäder", Opt::all(), Err(SingleWord("Bäder".into())))]
+    //
+    #[case("bäder", Opt::empty(), Err(NothingValid))]
+    #[case("bäder", Opt::TRY_TITLECASE_SUFFIX, Err(NothingValid))]
+    #[case("bäder", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("bäder", Opt::all(), Err(NothingValid))]
     fn test_decompound_german(
         #[case] word: &str,
-        #[case] titlecase_suffix: bool,
-        #[case] expected: Option<Vec<&str>>,
+        #[case] options: Opt,
+        #[case] expected: DecompositionTestResult,
     ) {
-        const WORDS: &[&str] = &["Süßwasser", "schwimm", "Bäder", "Mauer", "Dübel", "Kübel"];
+        const WORDS: &[&str] = &["Süßwasser", "schwimm", "Bäder"];
 
         assert_eq!(
-            decompound(word, &|w| WORDS.contains(&w), titlecase_suffix),
+            decompound(word, &|w| WORDS.contains(&w), options),
             expected.map(convert_to_owned)
         );
     }
 
     #[rstest]
-    #[case("Fußball", true, Some(vec!["Fuß", "Ball"]))]
-    #[case("Fußball", false, None)] // Suffix is noun, doesn't work
+    #[case("Fußball", Opt::empty(), Err(SingleWord("Fußball".into())))]
+    #[case("Fußball", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["Fuß", "Ball"]))]
+    #[case("Fußball", Opt::SPLIT_HYPHENATED, Err(SingleWord("Fußball".into())))]
+    #[case("Fußball", Opt::all(), Ok(vec!["Fuß", "Ball"]))]
     //
-    #[case("Fernsehen", true, Some(vec!["Fern", "sehen"]))]
-    #[case("Fernsehen", false, Some(vec!["Fern", "sehen"]))] // Suffix is verb, works
+    // Suffix is verb, works without titlecasing
+    #[case("Fernsehen", Opt::empty(), Ok(vec!["Fern", "sehen"]))]
+    #[case("Fernsehen", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["Fern", "sehen"]))]
+    #[case("Fernsehen", Opt::SPLIT_HYPHENATED, Ok(vec!["Fern", "sehen"]))]
+    #[case("Fernsehen", Opt::all(), Ok(vec!["Fern", "sehen"]))]
     //
-    #[case("Hellsehen", true, None)] // Prefix no in dictionary
-    #[case("Hellsehen", false, None)] // Prefix no in dictionary
+    // Prefix not in dictionary
+    #[case("Hellsehen", Opt::empty(), Err(NothingValid))]
+    #[case("Hellsehen", Opt::TRY_TITLECASE_SUFFIX, Err(NothingValid))]
+    #[case("Hellsehen", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("Hellsehen", Opt::all(), Err(NothingValid))]
     fn test_decompound_german_already_in_dictionary(
         #[case] word: &str,
-        #[case] titlecase_suffix: bool,
-        #[case] expected: Option<Vec<&str>>,
+        #[case] options: Opt,
+        #[case] expected: DecompositionTestResult,
     ) {
         const WORDS: &[&str] = &[
             "Fuß",
@@ -135,7 +185,37 @@ mod tests {
         ];
 
         assert_eq!(
-            decompound(word, &|w| WORDS.contains(&w), titlecase_suffix),
+            decompound(word, &|w| WORDS.contains(&w), options),
+            expected.map(convert_to_owned)
+        );
+    }
+
+    #[rstest]
+    #[case("Fußball", Opt::empty(), Err(NothingValid))]
+    #[case("Fußball", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["Fuß", "Ball"]))]
+    #[case("Fußball", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("Fußball", Opt::all(), Ok(vec!["Fuß", "Ball"]))]
+    //
+    // Suffix is verb, works without titlecasing
+    #[case("Fernsehen", Opt::empty(), Ok(vec!["Fern", "sehen"]))]
+    #[case("Fernsehen", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["Fern", "sehen"]))]
+    #[case("Fernsehen", Opt::SPLIT_HYPHENATED, Ok(vec!["Fern", "sehen"]))]
+    #[case("Fernsehen", Opt::all(), Ok(vec!["Fern", "sehen"]))]
+    //
+    // Prefix not in dictionary
+    #[case("Hellsehen", Opt::empty(), Err(NothingValid))]
+    #[case("Hellsehen", Opt::TRY_TITLECASE_SUFFIX, Err(NothingValid))]
+    #[case("Hellsehen", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("Hellsehen", Opt::all(), Err(NothingValid))]
+    fn test_decompound_german_not_already_in_dictionary(
+        #[case] word: &str,
+        #[case] options: Opt,
+        #[case] expected: DecompositionTestResult,
+    ) {
+        const WORDS: &[&str] = &["Fuß", "Ball", "Fern", "sehen", "hell"];
+
+        assert_eq!(
+            decompound(word, &|w| WORDS.contains(&w), options),
             expected.map(convert_to_owned)
         );
     }
@@ -143,20 +223,25 @@ mod tests {
     #[rstest]
     // Doesn't make the most sense as English dictionaries will also contains 'football'
     // and 'cupcake'...
-    #[case("football", true, Some(vec!["foot", "ball"]))]
-    #[case("cupcake", true, Some(vec!["cup", "cake"]))]
+    #[case("football", Opt::empty(), Ok(vec!["foot", "ball"]))]
+    // It only TRIES, *additionally*, it doesn't *break* the non-titlecase versions:
+    #[case("football", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["foot", "ball"]))]
+    #[case("football", Opt::SPLIT_HYPHENATED, Ok(vec!["foot", "ball"]))]
+    #[case("football", Opt::all(), Ok(vec!["foot", "ball"]))]
     //
-    #[case("football", false, Some(vec!["foot", "ball"]))]
-    #[case("cupcake", false, Some(vec!["cup", "cake"]))]
+    #[case("cupcake", Opt::empty(), Ok(vec!["cup", "cake"]))]
+    #[case("cupcake", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["cup", "cake"]))]
+    #[case("cupcake", Opt::SPLIT_HYPHENATED, Ok(vec!["cup", "cake"]))]
+    #[case("cupcake", Opt::all(), Ok(vec!["cup", "cake"]))]
     fn test_decompound_english(
         #[case] word: &str,
-        #[case] titlecase_suffix: bool,
-        #[case] expected: Option<Vec<&str>>,
+        #[case] options: Opt,
+        #[case] expected: DecompositionTestResult,
     ) {
         const WORDS: &[&str] = &["foot", "ball", "cup", "cake"];
 
         assert_eq!(
-            decompound(word, &|w| WORDS.contains(&w), titlecase_suffix),
+            decompound(word, &|w| WORDS.contains(&w), options),
             expected.map(convert_to_owned)
         );
     }
@@ -164,88 +249,153 @@ mod tests {
     #[rstest]
     // Still finds compound word, as prefix only ever extends to `footbal`, which is
     // invalid, so it falls back to the last valid split at `foot` and `ball`.
-    #[case("football", true, Some(vec!["foot", "ball"]))]
-    #[case("football", false, Some(vec!["foot", "ball"]))]
+    #[case("football", Opt::empty(), Ok(vec!["foot", "ball"]))]
+    #[case("football", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["foot", "ball"]))]
+    #[case("football", Opt::SPLIT_HYPHENATED, Ok(vec!["foot", "ball"]))]
+    #[case("football", Opt::all(), Ok(vec!["foot", "ball"]))]
     fn test_decompound_english_word_already_in_dictionary(
         #[case] word: &str,
-        #[case] titlecase_suffix: bool,
-        #[case] expected: Option<Vec<&str>>,
+        #[case] options: Opt,
+        #[case] expected: DecompositionTestResult,
     ) {
         const WORDS: &[&str] = &["foot", "ball", "football"];
 
         assert_eq!(
-            decompound(word, &|w| WORDS.contains(&w), titlecase_suffix),
+            decompound(word, &|w| WORDS.contains(&w), options),
             expected.map(convert_to_owned)
         );
     }
 
     #[rstest]
-    #[case("self-esteem", true, Some(vec!["self", "esteem"]))]
-    #[case("self-esteem", false, Some(vec!["self", "esteem"]))]
-    fn test_decompound_hyphenation(
+    #[case("self-esteem", Opt::empty(), Err(NothingValid))]
+    #[case("self-esteem", Opt::TRY_TITLECASE_SUFFIX, Err(NothingValid))]
+    #[case("self-esteem", Opt::SPLIT_HYPHENATED, Ok(vec!["self", "esteem"]))]
+    #[case("self-esteem", Opt::all(), Ok(vec!["self", "esteem"]))]
+    fn test_decompound_hyphenated_word_without_word_in_list(
         #[case] word: &str,
-        #[case] titlecase_suffix: bool,
-        #[case] expected: Option<Vec<&str>>,
+        #[case] options: Opt,
+        #[case] expected: DecompositionTestResult,
     ) {
         const WORDS: &[&str] = &["self", "esteem"];
 
         assert_eq!(
-            decompound(word, &|w| WORDS.contains(&w), titlecase_suffix),
+            decompound(word, &|w| WORDS.contains(&w), options),
             expected.map(convert_to_owned)
         );
     }
 
     #[rstest]
-    // Greedy prefix fetching. Suffix is uppercase as all suffix candidates are tried in
+    #[case("self-esteem", Opt::empty(), Err(SingleWord("self-esteem".into())))]
+    #[case("self-esteem", Opt::TRY_TITLECASE_SUFFIX, Err(SingleWord("self-esteem".into())))]
+    #[case("self-esteem", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("self-esteem", Opt::all(), Err(NothingValid))]
+    fn test_decompound_hyphenated_word_with_word_in_list_only(
+        #[case] word: &str,
+        #[case] options: Opt,
+        #[case] expected: DecompositionTestResult,
+    ) {
+        const WORDS: &[&str] = &["self-esteem"];
+
+        assert_eq!(
+            decompound(word, &|w| WORDS.contains(&w), options),
+            expected.map(convert_to_owned)
+        );
+    }
+
+    #[rstest]
+    #[case("self-esteem", Opt::empty(), Err(SingleWord("self-esteem".into())))]
+    #[case("self-esteem", Opt::TRY_TITLECASE_SUFFIX, Err(SingleWord("self-esteem".into())))]
+    #[case("self-esteem", Opt::SPLIT_HYPHENATED, Ok(vec!["self", "esteem"]))]
+    #[case("self-esteem", Opt::all(), Ok(vec!["self", "esteem"]))]
+    fn test_decompound_hyphenated_word_with_word_in_list_among_others(
+        #[case] word: &str,
+        #[case] options: Opt,
+        #[case] expected: DecompositionTestResult,
+    ) {
+        const WORDS: &[&str] = &["self", "esteem", "self-esteem"];
+
+        assert_eq!(
+            decompound(word, &|w| WORDS.contains(&w), options),
+            expected.map(convert_to_owned)
+        );
+    }
+
+    #[rstest]
+    // Greedy prefix fetching. When titlecasing, all suffix candidates are tried in
     // ascending order. Uppercase is first and matches immediately.
-    #[case("football", true, Some(vec!["footbal", "L"]))]
-    #[case("cupcake", true, Some(vec!["cupcak", "E"]))]
-    //
-    #[case("football", false, Some(vec!["footbal", "l"]))] // Note: not uppercase
-    #[case("cupcake", false, Some(vec!["cupcak", "e"]))] // Note: not uppercase
+    #[case("football", Opt::empty(), Ok(vec!["footbal", "l"]))]
+    #[case("football", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["footbal", "L"]))]
+    #[case("football", Opt::SPLIT_HYPHENATED, Ok(vec!["footbal", "l"]))]
+    #[case("football", Opt::all(), Ok(vec!["footbal", "L"]))]
     fn test_decompound_custom_check(
         #[case] word: &str,
-        #[case] titlecase_suffix: bool,
-        #[case] expected: Option<Vec<&str>>,
+        #[case] options: Opt,
+        #[case] expected: DecompositionTestResult,
     ) {
         assert_eq!(
-            decompound(word, &custom_check, titlecase_suffix),
+            decompound(word, &custom_check, options),
             expected.map(convert_to_owned)
         );
     }
 
     #[rstest]
-    #[case("🦀", true, Some(vec!["🦀"]))]
-    #[case("🦀🦀", true, Some(vec!["🦀", "🦀"]))]
+    #[case("🦀", Opt::empty(), Err(SingleWord("🦀".into())))]
+    #[case("🦀", Opt::TRY_TITLECASE_SUFFIX, Err(SingleWord("🦀".into())))]
+    #[case("🦀", Opt::SPLIT_HYPHENATED, Err(SingleWord("🦀".into())))]
+    #[case("🦀", Opt::all(), Err(SingleWord("🦀".into())))]
     //
-    #[case("🦀", false, Some(vec!["🦀"]))]
-    #[case("🦀🦀", false, Some(vec!["🦀", "🦀"]))]
+    #[case("🦀🦀", Opt::empty(), Ok(vec!["🦀", "🦀"]))]
+    #[case("🦀🦀", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["🦀", "🦀"]))]
+    #[case("🦀🦀", Opt::SPLIT_HYPHENATED, Ok(vec!["🦀", "🦀"]))]
+    #[case("🦀🦀", Opt::all(), Ok(vec!["🦀", "🦀"]))]
     //
-    #[case("العربية", true, Some(vec!["العربي", "ة"]))] // Arabic
+    // Arabic
+    #[case("العربية", Opt::empty(), Ok(vec!["العربي", "ة"]))]
+    #[case("العربية", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["العربي", "ة"]))]
+    #[case("العربية", Opt::SPLIT_HYPHENATED, Ok(vec!["العربي", "ة"]))]
+    #[case("العربية", Opt::all(), Ok(vec!["العربي", "ة"]))]
     //
-    #[case("中文", true, Some(vec!["中", "文"]))] // Chinese
+    // Chinese
+    #[case("中文", Opt::empty(), Ok(vec!["中", "文"]))]
+    #[case("中文", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["中", "文"]))]
+    #[case("中文", Opt::SPLIT_HYPHENATED, Ok(vec!["中", "文"]))]
+    #[case("中文", Opt::all(), Ok(vec!["中", "文"]))]
     //
-    #[case("日本語", true, Some(vec!["日本", "語"]))] // Japanese
+    // Japanese
+    #[case("日本語", Opt::empty(), Ok(vec!["日本", "語"]))]
+    #[case("日本語", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["日本", "語"]))]
+    #[case("日本語", Opt::SPLIT_HYPHENATED, Ok(vec!["日本", "語"]))]
+    #[case("日本語", Opt::all(), Ok(vec!["日本", "語"]))]
     //
-    #[case("한국어", true, Some(vec!["한국", "어"]))] // Korean
+    // Korean
+    #[case("한국어", Opt::empty(), Ok(vec!["한국", "어"]))]
+    #[case("한국어", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["한국", "어"]))]
+    #[case("한국어", Opt::SPLIT_HYPHENATED, Ok(vec!["한국", "어"]))]
+    #[case("한국어", Opt::all(), Ok(vec!["한국", "어"]))]
     //
     // Special characters
-    #[case("\n", true, Some(vec!["\n"]))]
-    #[case("\n", false, Some(vec!["\n"]))]
+    #[case("\n", Opt::empty(), Err(SingleWord("\n".into())))]
+    #[case("\n", Opt::TRY_TITLECASE_SUFFIX, Err(SingleWord("\n".into())))]
+    #[case("\n", Opt::SPLIT_HYPHENATED, Err(SingleWord("\n".into())))]
+    #[case("\n", Opt::all(), Err(SingleWord("\n".into())))]
     //
-    #[case(" ", true, Some(vec![" "]))]
-    #[case(" ", false, Some(vec![" "]))]
+    #[case(" ", Opt::empty(), Err(SingleWord(" ".into())))]
+    #[case(" ", Opt::TRY_TITLECASE_SUFFIX, Err(SingleWord(" ".into())))]
+    #[case(" ", Opt::SPLIT_HYPHENATED, Err(SingleWord(" ".into())))]
+    #[case(" ", Opt::all(), Err(SingleWord(" ".into())))]
     //
-    #[case("", true, Some(vec![""]))]
-    #[case("", false, Some(vec![""]))]
+    #[case("", Opt::empty(), Err(SingleWord("".into())))]
+    #[case("", Opt::TRY_TITLECASE_SUFFIX, Err(SingleWord("".into())))]
+    #[case("", Opt::SPLIT_HYPHENATED, Err(SingleWord("".into())))]
+    #[case("", Opt::all(), Err(SingleWord("".into())))]
     fn test_decompound_unicode_edge_cases(
         #[case] word: &str,
-        #[case] titlecase_suffix: bool,
-        #[case] expected: Option<Vec<&str>>,
+        #[case] options: Opt,
+        #[case] expected: DecompositionTestResult,
     ) {
         let anything_goes = |_: &str| true;
         assert_eq!(
-            decompound(word, &anything_goes, titlecase_suffix),
+            decompound(word, &anything_goes, options),
             expected.map(convert_to_owned)
         );
     }
