@@ -20,7 +20,7 @@ the user.
 ```rust
 use decompound::{decompound, DecompositionOptions};
 
-let is_valid_single_word = |w: &str| ["bed", "room",].contains(&w);
+let is_valid_single_word = |w: &str| ["bed", "room"].contains(&w);
 
 assert_eq!(
     decompound(
@@ -92,8 +92,8 @@ assert_eq!(
         "snowball",
         &is_valid_single_word,
         DecompositionOptions::empty(),
-    ),
-    Err(DecompositionError::NothingValid)
+    ).unwrap_err(),
+    DecompositionError::NothingValid
 );
 ```
 
@@ -104,7 +104,7 @@ Compound words (like `railroad`) being included in a lookup dictionary (instead 
 *only* its root words `rail` and `road`) is an example "pathological" case.
 Accommodating compound words *yourself* is precisely what this crate is [supposed to
 alleviate](#motivation). If you already have and do not want to or cannot drop that
-capability, this crate is not needed (hence "overeager checks").
+capability, this crate might be obsolete for your case (hence "overeager checks").
 
 Although [`decompound`] prefers splits if possible, such as
 
@@ -126,8 +126,8 @@ assert_eq!(
 
 if root words are missing but the compound itself is present, decomposition technically
 *fails*. This case is considered an error, and marked as such. That is [more
-ergonomic](https://web.archive.org/web/20230815000654/https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/)
-than being returned a [`Vec`] of constituents of length 1, requiring more awkward error
+ergonomic](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/) than
+being returned a [`Vec`] of constituents of length 1, requiring more awkward error
 handling at the call site.
 
 ```rust
@@ -141,8 +141,8 @@ assert_eq!(
         "firefly",
         &is_valid_single_word,
         DecompositionOptions::empty(),
-    ),
-    Err(DecompositionError::SingleWord("firefly".to_string()))
+    ).unwrap_err(),
+    DecompositionError::SingleWord("firefly".to_string())
 );
 ```
 

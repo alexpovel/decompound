@@ -24,12 +24,14 @@ use unicode_titlecase::StrTitleCase;
 /// Error cases for the [`Result`] of [`decompound`].
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DecompositionError {
-    /// Result was *not* a compound word, but a valid *single* word.
-    /// Whether this is a hard error is subjective: in any case, *decomposition failed*.
+    /// Result was *not* a compound word, but a valid *single* word. Whether this is a
+    /// hard error is subjective: in any case, *decomposition failed*, but the word is
+    /// returned to the caller for further processing.
     SingleWord(String),
     /// Nothing valid was found (neither a compound word nor a single, non-compound
     /// word).
-    NothingValid,
+    NothingValid, // Kind of like `Option::None`, but incompatible;
+                  // use obviously different name so it's not confused.
 }
 
 impl Display for DecompositionError {
@@ -54,12 +56,95 @@ bitflags! {
     /// more.
     #[derive(Clone)]
     pub struct DecompositionOptions: u32 {
-        /// *In addition* to the original suffix being tried, try its titlecased version
+        /// In *addition* to the original suffix being tried, try its titlecased version
         /// as well. Does nothing if suffix is already titlecased.
+        ///
+        /// This option is mostly relevant for languages with meaningful capitalization.
+        ///
+        /// ```
+        /// use decompound::{decompound, DecompositionError, DecompositionOptions};
+        ///
+        /// let is_valid_single_word = |w: &str| ["Haus", "Boot"].contains(&w);
+        ///
+        /// let word = "Hausboot";
+        ///
+        /// // Without this option
+        /// assert_eq!(
+        ///     decompound(
+        ///         word,
+        ///         &is_valid_single_word,
+        ///         DecompositionOptions::empty(),
+        ///     ).unwrap_err(),
+        ///     DecompositionError::NothingValid
+        /// );
+        ///
+        /// // With this option
+        /// assert_eq!(
+        ///     decompound(
+        ///         word,
+        ///         &is_valid_single_word,
+        ///         DecompositionOptions::TRY_TITLECASE_SUFFIX,
+        ///     ).unwrap(),
+        ///     vec!["Haus", "Boot"]
+        /// );
+        /// ```
         const TRY_TITLECASE_SUFFIX = 1;
         /// Treat hyphenated words as compound words. Its constituents will be returned
         /// as a collection of *all* constituents of the hyphenated word, *without* any
-        /// hyphens.
+        /// hyphens:
+        ///
+        /// ```
+        /// use decompound::{decompound, DecompositionError, DecompositionOptions};
+        ///
+        /// let is_valid_single_word = |w: &str| [
+        ///     "room",
+        ///     "bed",
+        ///     "super",
+        ///     "hero",
+        ///     "in",
+        ///     "side",
+        /// ].contains(&w);
+        ///
+        /// let word = "bedroom-superhero-inside";
+        ///
+        /// // Without this option
+        /// assert_eq!(
+        ///     decompound(
+        ///         word,
+        ///         &is_valid_single_word,
+        ///         DecompositionOptions::empty(),
+        ///     ).unwrap_err(),
+        ///     DecompositionError::NothingValid
+        /// );
+        ///
+        /// // With this option
+        /// assert_eq!(
+        ///     decompound(
+        ///         word,
+        ///         &is_valid_single_word,
+        ///         DecompositionOptions::SPLIT_HYPHENATED,
+        ///     ).unwrap(),
+        ///     vec!["bed", "room", "super", "hero", "in", "side"]
+        /// );
+        /// ```
+        ///
+        /// Any error in any of the found subwords will cause the entire operation to
+        /// fail:
+        ///
+        /// ```
+        /// use decompound::{decompound, DecompositionError, DecompositionOptions};
+        ///
+        /// let is_valid_single_word = |w: &str| ["room", "bed"].contains(&w);
+        ///
+        /// assert_eq!(
+        ///     decompound(
+        ///         "bedroom-error", // 'error' is not a valid word here
+        ///         &is_valid_single_word,
+        ///         DecompositionOptions::SPLIT_HYPHENATED,
+        ///     ).unwrap_err(),
+        ///     DecompositionError::NothingValid // Not even `vec!["bed", "room"]`
+        /// );
+        /// ```
         const SPLIT_HYPHENATED = 1 << 1;
     }
 }
@@ -71,13 +156,18 @@ impl AsRef<DecompositionOptions> for DecompositionOptions {
 }
 
 /// [`Result`] of a [`decompound`] operation.
+///
+/// Note constituent words are returned as owned, even if that's not (always) necessary.
+/// It *is* necessary when titlecasing is enabled
+/// ([`DecompositionOptions::TRY_TITLECASE_SUFFIX`]), at which point it's easier to
+/// always return owned versions, even when unnecessary.
 pub type DecompositionResult = Result<Vec<String>, DecompositionError>;
 
-/// Docs...
+/// Refer to the [crate-level documentation](crate) for this item.
 ///
 /// ## Errors
 ///
-/// ...
+/// Errors are covered in the [crate-level documentation](crate#failure-modes).
 pub fn decompound(
     word: impl AsRef<str>,
     is_valid_single_word: &impl Fn(&str) -> bool,
@@ -98,7 +188,7 @@ pub fn decompound(
                 // valid, where each part is only a 'single' word, not again a compound
                 // word in itself.
                 Err(DecompositionError::SingleWord(word)) => constituents.push(word),
-                _ => break,
+                _ => return Err(DecompositionError::NothingValid),
             };
         }
 
