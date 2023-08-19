@@ -8,7 +8,7 @@ Useful for [culling down existing dictionaries at build time](#motivation).
 
 The docs are best viewed via [docs.rs](https://docs.rs/decompound).
 
-[![crates](https://img.shields.io/crates/v/decompound.svg)](https://crates.io/crates/decompound)
+[![codecov](https://codecov.io/github/alexpovel/decompound/graph/badge.svg?token=VCCO4HF6MT)](https://codecov.io/github/alexpovel/decompound)[![crates](https://img.shields.io/crates/v/decompound.svg)](https://crates.io/crates/decompound)
 
 ## Usage
 
