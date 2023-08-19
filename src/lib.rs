@@ -88,43 +88,25 @@ pub fn decompound(
     let options = options.as_ref();
 
     if options.contains(DecompositionOptions::SPLIT_HYPHENATED) {
-        // let mut n = 0;
-        for subword in word.split('-') {
-            // n += 1;
+        // Avoid reentry on upcoming recursive call
+        let options = options.clone() - DecompositionOptions::SPLIT_HYPHENATED;
 
-            match decompound(
-                subword,
-                is_valid_single_word,
-                // Avoid reentry on recursive calls
-                options.clone() - DecompositionOptions::SPLIT_HYPHENATED,
-            ) {
+        for subword in word.split('-') {
+            match decompound(subword, is_valid_single_word, &options) {
                 Ok(words) => constituents.extend(words),
                 // Actually allowed in this mode: words like 'string-concatenation' are
-                // valid, where each is only a single word.
+                // valid, where each part is only a 'single' word, not again a compound
+                // word in itself.
                 Err(DecompositionError::SingleWord(word)) => constituents.push(word),
-                Err(e) => return Err(e),
+                _ => break,
             };
         }
 
-        // let had_hyphens = n > 1;
-        // if had_hyphens {
-        //     debug_assert!(
-        //         !constituents.is_empty(),
-        //         "Hyphenated word with all-valid subwords must have constituents"
-        //     );
-        // }
-
-        return match constituents.len() {
-            0 => Err(DecompositionError::NothingValid),
-            1 => Err(DecompositionError::SingleWord(word.to_owned())),
+        return match &constituents[..] {
+            [] => Err(DecompositionError::NothingValid),
+            [w] => Err(DecompositionError::SingleWord(w.into())),
             _ => Ok(constituents),
         };
-
-        // if constituents.len() == 1 {
-        //     return Err(DecompositionError::SingleWord(word.to_owned()));
-        // }
-
-        // return Ok(constituents);
     }
 
     if is_valid_compound_word(word, is_valid_single_word, options, &mut constituents) {

@@ -2,8 +2,16 @@
 name = "decompound"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+rust-version = "1.64.0"
+authors = ["Alex Povel <rust@alexpovel.de>"]
+description = "Decompose a compound word into its constituent parts. Works in any language, as you provide the rules around what constitutes a (*single*) word."
+license = "MIT"
+repository = "https://github.com/alexpovel/decompound"
+readme = "README.md"
+documentation = "https://docs.rs/decompound"
+keywords = ["dictionary", "compound", "word", "detection"]
+categories = ["algorithms"]
+include = ["README.md", "LICENSE", "Cargo.toml", "src"]
 
 [dependencies]
 bitflags = "2.4.0"

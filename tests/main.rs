@@ -321,6 +321,61 @@ mod tests {
     }
 
     #[rstest]
+    #[case("Küchenfühler-Tiger", Opt::empty(), Err(NothingValid))]
+    #[case("Küchenfühler-Tiger", Opt::TRY_TITLECASE_SUFFIX, Err(NothingValid))]
+    #[case("Küchenfühler-Tiger", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("Küchenfühler-Tiger", Opt::all(), Ok(vec!["Küchen", "Fühler", "Tiger"]))]
+    //
+    #[case("Türangel-Gerätprüfer", Opt::empty(), Err(NothingValid))]
+    #[case("Türangel-Gerätprüfer", Opt::TRY_TITLECASE_SUFFIX, Err(NothingValid))]
+    #[case("Türangel-Gerätprüfer", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("Türangel-Gerätprüfer", Opt::all(), Ok(vec!["Tür", "Angel", "Gerät", "Prüfer"]))]
+    //
+    #[case(
+        "Schwingschleifer-Überlast-Schutzhören",
+        Opt::empty(),
+        Err(NothingValid)
+    )]
+    #[case(
+        "Schwingschleifer-Überlast-Schutzhören",
+        Opt::TRY_TITLECASE_SUFFIX,
+        Err(NothingValid)
+    )]
+    #[case(
+        "Schwingschleifer-Überlast-Schutzhören",
+        Opt::SPLIT_HYPHENATED,
+        Err(NothingValid)
+    )]
+    #[case("Schwingschleifer-Überlast-Schutzhören", Opt::all(), Ok(vec!["Schwing", "Schleifer", "Überlast", "Schutz", "hören"]))]
+    fn test_decompound_complex_german_hyphenated_words(
+        #[case] word: &str,
+        #[case] options: Opt,
+        #[case] expected: DecompositionTestResult,
+    ) {
+        const WORDS: &[&str] = &[
+            "Küchen",
+            "Fühler",
+            "Tiger",
+            //
+            "Tür",
+            "Angel",
+            "Gerät",
+            "Prüfer",
+            //
+            "Schwing",
+            "Schleifer",
+            "Überlast",
+            "Schutz",
+            "hören",
+        ];
+
+        assert_eq!(
+            decompound(word, &|w| WORDS.contains(&w), options),
+            expected.map(convert_to_owned)
+        );
+    }
+
+    #[rstest]
     // Greedy prefix fetching. When titlecasing, all suffix candidates are tried in
     // ascending order. Uppercase is first and matches immediately.
     #[case("football", Opt::empty(), Ok(vec!["footbal", "l"]))]

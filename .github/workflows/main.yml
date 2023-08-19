@@ -1,0 +1,94 @@
+name: Main
+
+on:
+  push:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-test:
+    name: Build and test (${{ matrix.os }})
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: swatinem/rust-cache@v2
+      - name: Build
+        run: >
+          cargo build
+          --verbose
+
+      - name: Run tests (without coverage)
+        if: matrix.os != 'ubuntu-latest'
+        run: >
+          cargo test
+          --verbose
+
+      - name: Install cargo-tarpaulin (for coverage)
+        # As recommened by `cargo-binstall` team:
+        # https://github.com/cargo-bins/cargo-binstall/tree/d5549ce99ebc82b1ceee93a41375137b7dbd1a1f#faq
+        uses: taiki-e/install-action@v2
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          tool: cargo-tarpaulin
+      - name: Run tests (with coverage)
+        if: matrix.os == 'ubuntu-latest'
+        run: >
+          rustup toolchain install --profile minimal nightly
+          && cargo tarpaulin
+          --verbose
+          --out Xml
+          --engine llvm
+          --skip-clean
+          --tests
+          --doc
+      - name: Upload coverage reports to Codecov
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v3
+
+  release-please:
+    name: Execute release chores
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    runs-on: ubuntu-latest
+    needs: build-test
+
+    outputs:
+      created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+
+    steps:
+      - uses: google-github-actions/release-please-action@v3
+        id: release
+        with:
+          release-type: rust
+
+  publish:
+    name: Publish to crates.io
+
+    runs-on: ubuntu-latest
+    needs: release-please
+    if: needs.release-please.outputs.created
+
+    environment: crates.io
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: swatinem/rust-cache@v2
+
+      - name: Publish
+      # https://doc.rust-lang.org/cargo/reference/config.html?highlight=CARGO_REGISTRY_TOKEN#credentials
+        run: >
+          cargo publish
+          --verbose
+          --no-verify
+          --token ${{ secrets.CARGO_REGISTRY_TOKEN }}

@@ -1,27 +1,34 @@
 # Decompound
 
-Decomposes a compound word into its constituent parts. Works in any language, as you
+Decompose a compound word into its constituent parts. Works in any language, as you
 provide the rules around what constitutes a (*single*) word. The algorithm is
 Unicode-aware.
 
+Useful for [culling down existing dictionaries at build time](#motivation).
+
+The docs are best viewed via [docs.rs](https://docs.rs/decompound).
+
+[![crates](https://img.shields.io/crates/v/decompound.svg)](https://crates.io/crates/decompound)
+
 ## Usage
 
-Usage is very straightforward. The party piece is a closure, deciding whether a *single*
-word is valid. As this can be highly dynamic and language-specific, this decision is
-left to the user.
+Usage is very straightforward. There is only one (free) function of interest,
+[`decompound`]. Its party piece is a closure argument, deciding whether a *single* word
+is valid. As this can be highly dynamic and language-specific, this decision is left to
+the user.
 
 ```rust
 use decompound::{decompound, DecompositionOptions};
 
-let is_valid_single_word = |w: &str| ["jet", "ski",].contains(&w);
+let is_valid_single_word = |w: &str| ["bed", "room",].contains(&w);
 
 assert_eq!(
     decompound(
-        "jetski",
+        "bedroom",
         &is_valid_single_word,
         DecompositionOptions::empty(),
     ).unwrap(),
-    vec!["jet", "ski"]
+    vec!["bed", "room"]
 );
 ```
 
@@ -33,34 +40,38 @@ choice.
 
 ### Configuration
 
-Configuration is exposed as a [bit field](https://en.wikipedia.org/wiki/Bit_field) via
+Configuration is exposed as a [bit
+field](https://docs.rs/bitflags/latest/bitflags/index.html) via
 [`DecompositionOptions`]. It affords more complex use cases, freely combinable.
-Usefulness depends on the natural language at hand. Some, for example German, might require:
+Usefulness largely depends on the natural language at hand. Some, for example German,
+might require:
 
 ```rust
 use decompound::{decompound, DecompositionError, DecompositionOptions};
 
-let is_valid_single_word = |w: &str| ["Haus", "Boot", "Küche"].contains(&w);
+let is_valid_single_word = |w: &str| ["Rüben", "Knollen", "Küche"].contains(&w);
 
 assert_eq!(
     decompound(
-        "Hausboot-Küche",
+        "Rübenknollen-Küche",
         &is_valid_single_word,
         // Wouldn't find anything without titlecasing `boot` to `Boot`,
         // and splitting on hyphens.
-        DecompositionOptions::SPLIT_HYPHENATED | DecompositionOptions::TRY_TITLECASE_SUFFIX
+        DecompositionOptions::SPLIT_HYPHENATED
+        | DecompositionOptions::TRY_TITLECASE_SUFFIX
     ).unwrap(),
-    vec!["Haus", "Boot", "Küche"]
+    vec!["Rüben", "Knollen", "Küche"]
 );
 ```
 
-This covers all currently available options already, see also:
+This covers all currently available options already:
 
 ```rust
 use decompound::DecompositionOptions;
 
 assert!(
     (
+        // This is doc-tested so new options are not forgotten.
         DecompositionOptions::SPLIT_HYPHENATED
         | DecompositionOptions::TRY_TITLECASE_SUFFIX
     ).is_all()
@@ -74,7 +85,7 @@ If the word cannot be decomposed, a [`DecompositionError`] is returned.
 ```rust
 use decompound::{decompound, DecompositionError, DecompositionOptions};
 
-let is_valid_single_word = |w: &str| ["jet", "ski"].contains(&w);
+let is_valid_single_word = |w: &str| ["water", "melon"].contains(&w);
 
 assert_eq!(
     decompound(
@@ -89,26 +100,27 @@ assert_eq!(
 #### Overeager validity checks
 
 Nothing prevents you from providing a closure *which itself accepts compound words*.
-Compound words being included in a lookup dictionary (instead of *only* root words) is
-an example 'pathological' case. Accommodating compound words yourself is precisely what
-this crate is [supposed to alleviate](#motivation). If you already have that capability,
-the crate at hand is not needed (hence "overeager checks").
+Compound words (like `railroad`) being included in a lookup dictionary (instead of
+*only* its root words `rail` and `road`) is an example "pathological" case.
+Accommodating compound words *yourself* is precisely what this crate is [supposed to
+alleviate](#motivation). If you already have and do not want to or cannot drop that
+capability, this crate is not needed (hence "overeager checks").
 
-Although [`decompound`] always prefers splits if possible,
+Although [`decompound`] prefers splits if possible, such as
 
 ```rust
 use decompound::{decompound, DecompositionError, DecompositionOptions};
 
 // Contains a compound word *and* its root words.
-let is_valid_single_word = |w: &str| ["railroad", "rail", "road"].contains(&w);
+let is_valid_single_word = |w: &str| ["blueberry", "blue", "berry"].contains(&w);
 
 assert_eq!(
     decompound(
-        "railroad",
+        "blueberry",
         &is_valid_single_word,
         DecompositionOptions::empty(),
     ).unwrap(),
-    vec!["rail", "road"]
+    vec!["blue", "berry"]
 );
 ```
 
@@ -121,19 +133,48 @@ handling at the call site.
 ```rust
 use decompound::{decompound, DecompositionError, DecompositionOptions};
 
-// *Only* contains a compound word.
-let is_valid_single_word = |w: &str| ["railroad"].contains(&w);
+// *Only* contains a compound word, not its root words.
+let is_valid_single_word = |w: &str| ["firefly"].contains(&w);
 
 assert_eq!(
     decompound(
-        "railroad",
+        "firefly",
         &is_valid_single_word,
         DecompositionOptions::empty(),
     ),
-    Err(DecompositionError::SingleWord("railroad".to_string()))
+    Err(DecompositionError::SingleWord("firefly".to_string()))
 );
 ```
 
+Match on this variant if this case is not an error in your domain (this crate itself
+does so internally, too).
+
 ## Motivation
 
-...
+The crate implementation is simple and nothing you wouldn't be able to write yourself.
+
+There is a catch though. As mentioned, this crate can help you move checks for compound
+words from static (a fixed dictionary) to runtime ([`decompound`]). For some languages,
+this is strictly *required*, as the set of compound words might be immense, or
+(effectively, not mathematically) unbounded, meaning root words may be combined to
+arbitrary lengths. German is such a case. No dictionary exists to cover all possible
+German words. However, [existing ones](https://sourceforge.net/projects/germandict/) are
+almost guaranteed to themselves contain *some* compound words (which is generally
+helpful). When using such dictionaries *and* this crate to cover all remaining,
+arbitrary compound words, **duplication arises, and the dictionary is no longer
+minimal**. Most, perhaps all, compound words in the dictionary could be detected at
+runtime instead (providing a single source of truth along the way).
+
+Culling the dictionary might lead to significant, [perhaps
+necessary](https://github.com/rust-lang/crates.io/issues/195) savings in size (memory
+and executable), so a [build
+script](https://doc.rust-lang.org/cargo/reference/build-scripts.html) is needed. But
+now, *both* the actual code *and* the [build script
+depend](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#build-dependencies)
+on that same detection algorithm. If what you cull the dictionary with gets out of sync
+with what's done at runtime, bugs arise. The build script cannot depend on what it's
+building. Currently (2023-08-19), **there is no place for the compound check to live
+except another crate**, external to both the build script and actual code. That's this
+crate. It affords a **non-cyclic build graph**, a single source of truth for the
+compound check and affords the usage of *any* dictionary, no out-of-band preprocessing
+necessary (the original dictionary can be kept).
