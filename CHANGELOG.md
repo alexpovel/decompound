@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/alexpovel/decompound/compare/v0.1.0...v0.2.0) (2023-08-27)
+
+
+### Features
+
+* Prefer shortest possible splits, offer `SHATTER` option for longest ([306cbeb](https://github.com/alexpovel/decompound/commit/306cbeba572dcceca6e309a799994da449fec2a8))
+
 ## 0.1.0 (2023-08-19)
 
 
