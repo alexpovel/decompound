@@ -19,4 +19,5 @@ log = "0.4.19"
 unicode_titlecase = "2.2.0"
 
 [dev-dependencies]
+assert_cmd = "2.0.12"
 rstest = "0.18.1"

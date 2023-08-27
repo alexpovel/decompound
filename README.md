@@ -180,3 +180,17 @@ on that same detection algorithm. Where does *it* live?
   - a single source of truth for the algorithm,
   - usage of *any* dictionary, no out-of-band preprocessing necessary (the original
   dictionary can be kept).
+
+## Developing
+
+The library crate contains an [accompanying binary](./src/main.rs). It is accessible
+simply via `cargo run`. This allows running this crate locally, provided a word list on
+stdin. For example:
+
+```console
+$ sudo apt update && sudo apt install --yes wngerman
+$ cat /usr/share/dict/ngerman | cargo run -- --try-titlecase-suffix --split-hyphenated 'Affengruppen-Überfall' 2>/dev/null
+Affen
+Gruppen
+Überfall
+```

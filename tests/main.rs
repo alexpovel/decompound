@@ -440,6 +440,38 @@ mod tests {
     }
 
     #[rstest]
+    // This was bugged in `v0.1.0` and would return `["ab", "Haus", "haust"]`
+    #[case("abhaust", Opt::empty(), Ok(vec!["ab", "haust"]))]
+    #[case("abhaust", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["ab", "haust"]))]
+    #[case("abhaust", Opt::SPLIT_HYPHENATED, Ok(vec!["ab", "haust"]))]
+    #[case("abhaust", Opt::SHATTER, Ok(vec!["ab", "haust"]))]
+    #[case("abhaust", Opt::TRY_TITLECASE_SUFFIX | Opt::SHATTER, Ok(vec!["ab", "haust"]))]
+    #[case("abhaust", Opt::TRY_TITLECASE_SUFFIX | Opt::SPLIT_HYPHENATED, Ok(vec!["ab", "haust"]))]
+    #[case("abhaust", Opt::SPLIT_HYPHENATED | Opt::SHATTER, Ok(vec!["ab", "haust"]))]
+    #[case("abhaust", Opt::all(), Ok(vec!["ab", "haust"]))]
+    //
+    #[case("aufwärtsging", Opt::empty(), Ok(vec!["aufwärts", "ging"]))]
+    #[case("aufwärtsging", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["aufwärts", "ging"]))]
+    #[case("aufwärtsging", Opt::SPLIT_HYPHENATED, Ok(vec!["aufwärts", "ging"]))]
+    #[case("aufwärtsging", Opt::SHATTER, Ok(vec!["aufwärts", "ging"]))]
+    #[case("aufwärtsging", Opt::TRY_TITLECASE_SUFFIX | Opt::SHATTER, Ok(vec!["aufwärts", "ging"]))]
+    #[case("aufwärtsging", Opt::TRY_TITLECASE_SUFFIX | Opt::SPLIT_HYPHENATED, Ok(vec!["aufwärts", "ging"]))]
+    #[case("aufwärtsging", Opt::SPLIT_HYPHENATED | Opt::SHATTER, Ok(vec!["aufwärts", "ging"]))]
+    #[case("aufwärtsging", Opt::all(), Ok(vec!["aufwärts", "ging"]))]
+    fn test_decompound_handles_overlaps(
+        #[case] word: &str,
+        #[case] options: Opt,
+        #[case] expected: DecompositionTestResult,
+    ) {
+        const WORDS: &[&str] = &["ab", "Haus", "haust", "aufwärts", "ging", "Gin"];
+
+        assert_eq!(
+            decompound(word, &|w| WORDS.contains(&w), options),
+            expected.map(convert_to_owned)
+        );
+    }
+
+    #[rstest]
     #[case("🦀", Opt::empty(), Err(SingleWord("🦀".into())))]
     #[case("🦀", Opt::TRY_TITLECASE_SUFFIX, Err(SingleWord("🦀".into())))]
     #[case("🦀", Opt::SPLIT_HYPHENATED, Err(SingleWord("🦀".into())))]
