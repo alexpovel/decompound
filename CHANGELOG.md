@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/alexpovel/decompound/compare/v0.2.0...v0.3.0) (2023-08-27)
+
+
+### Features
+
+* Add binary for local running/debugging ([53e4b81](https://github.com/alexpovel/decompound/commit/53e4b8198cf438fe9c117064e3245d93f56b4784))
+
 ## [0.2.0](https://github.com/alexpovel/decompound/compare/v0.1.0...v0.2.0) (2023-08-27)
 
 
