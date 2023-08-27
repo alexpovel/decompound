@@ -65,19 +65,7 @@ assert_eq!(
 );
 ```
 
-This covers all currently available options already:
-
-```rust
-use decompound::DecompositionOptions;
-
-assert!(
-    (
-        // This is doc-tested so new options are not forgotten.
-        DecompositionOptions::SPLIT_HYPHENATED
-        | DecompositionOptions::TRY_TITLECASE_SUFFIX
-    ).is_all()
-);
-```
+For more options and examples, refer to the docs of [`DecompositionOptions`].
 
 ### Failure modes
 

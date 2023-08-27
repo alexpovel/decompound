@@ -2,8 +2,8 @@ fn convert_to_owned(v: Vec<&str>) -> Vec<String> {
     v.into_iter().map(|s| s.to_owned()).collect()
 }
 
-fn custom_check(word: &str) -> bool {
-    word.chars().all(|c| c.is_ascii_alphabetic())
+fn word_is_longer_than_2_chars(word: &str) -> bool {
+    word.len() > 2
 }
 
 #[cfg(test)]
@@ -13,7 +13,7 @@ mod tests {
     };
     use rstest::rstest;
 
-    use crate::{convert_to_owned, custom_check};
+    use crate::{convert_to_owned, word_is_longer_than_2_chars};
 
     type DecompositionTestResult<'a> = Result<Vec<&'a str>, DecompositionError>;
 
@@ -378,17 +378,63 @@ mod tests {
     #[rstest]
     // Greedy prefix fetching. When titlecasing, all suffix candidates are tried in
     // ascending order. Uppercase is first and matches immediately.
-    #[case("football", Opt::empty(), Ok(vec!["footbal", "l"]))]
-    #[case("football", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["footbal", "L"]))]
-    #[case("football", Opt::SPLIT_HYPHENATED, Ok(vec!["footbal", "l"]))]
-    #[case("football", Opt::all(), Ok(vec!["footbal", "L"]))]
+    #[case("football", Opt::empty(), Ok(vec!["foo", "tball"]))]
+    #[case("football", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["foo", "Tball"]))]
+    #[case("football", Opt::SPLIT_HYPHENATED, Ok(vec!["foo", "tball"]))]
+    #[case("football", Opt::SHATTER, Ok(vec!["footb", "all"]))]
+    #[case("football", Opt::SHATTER | Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["footb", "all"]))]
+    #[case("football", Opt::all(), Ok(vec!["footb", "all"]))]
     fn test_decompound_custom_check(
         #[case] word: &str,
         #[case] options: Opt,
         #[case] expected: DecompositionTestResult,
     ) {
         assert_eq!(
-            decompound(word, &custom_check, options),
+            decompound(word, &word_is_longer_than_2_chars, options),
+            expected.map(convert_to_owned)
+        );
+    }
+
+    #[rstest]
+    #[case("Empfängerstation", Opt::empty(), Err(NothingValid))]
+    #[case("Empfängerstation", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["Empfänger", "Station"]))]
+    #[case("Empfängerstation", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("Empfängerstation", Opt::SHATTER, Err(NothingValid))]
+    #[case("Empfängerstation", Opt::TRY_TITLECASE_SUFFIX | Opt::SHATTER, Ok(vec!["Empfängers", "tat", "Ion"]))]
+    #[case("Empfängerstation", Opt::TRY_TITLECASE_SUFFIX | Opt::SPLIT_HYPHENATED, Ok(vec!["Empfänger", "Station"]))]
+    #[case("Empfängerstation", Opt::SPLIT_HYPHENATED | Opt::SHATTER, Err(NothingValid))]
+    #[case("Empfängerstation", Opt::all(), Ok(vec!["Empfängers", "tat", "Ion"]))]
+    //
+    #[case("Entnahmestelle", Opt::empty(), Err(NothingValid))]
+    #[case("Entnahmestelle", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["Entnahme", "Stelle"]))]
+    #[case("Entnahmestelle", Opt::SPLIT_HYPHENATED, Err(NothingValid))]
+    #[case("Entnahmestelle", Opt::SHATTER, Err(NothingValid))]
+    #[case("Entnahmestelle", Opt::TRY_TITLECASE_SUFFIX | Opt::SHATTER, Ok(vec!["Entnahme", "St", "Elle"]))]
+    #[case("Entnahmestelle", Opt::TRY_TITLECASE_SUFFIX | Opt::SPLIT_HYPHENATED, Ok(vec!["Entnahme", "Stelle"]))]
+    #[case("Entnahmestelle", Opt::SPLIT_HYPHENATED | Opt::SHATTER, Err(NothingValid))]
+    #[case("Entnahmestelle", Opt::all(), Ok(vec!["Entnahme", "St", "Elle"]))]
+    fn test_decompound_with_shatter_causes_longer_legal_split(
+        #[case] word: &str,
+        #[case] options: Opt,
+        #[case] expected: DecompositionTestResult,
+    ) {
+        const WORDS: &[&str] = &[
+            // Word in question is prefix:
+            "Empfänger",
+            "Empfängers",
+            "Station",
+            "tat",
+            "Ion",
+            //
+            "Entnahme",
+            // Word in question is in suffix position:
+            "Stelle",
+            "St",
+            "Elle",
+        ];
+
+        assert_eq!(
+            decompound(word, &|w| WORDS.contains(&w), options),
             expected.map(convert_to_owned)
         );
     }
@@ -405,10 +451,11 @@ mod tests {
     #[case("🦀🦀", Opt::all(), Ok(vec!["🦀", "🦀"]))]
     //
     // Arabic
-    #[case("العربية", Opt::empty(), Ok(vec!["العربي", "ة"]))]
-    #[case("العربية", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["العربي", "ة"]))]
-    #[case("العربية", Opt::SPLIT_HYPHENATED, Ok(vec!["العربي", "ة"]))]
-    #[case("العربية", Opt::all(), Ok(vec!["العربي", "ة"]))]
+    #[case("العربية", Opt::empty(), Ok(vec!["ا", "لعربية"]))]
+    #[case("العربية", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["ا", "لعربية"]))]
+    #[case("العربية", Opt::SPLIT_HYPHENATED, Ok(vec!["ا", "لعربية"]))]
+    #[case("العربية", Opt::SHATTER, Ok(vec!["ا", "ل", "ع", "ر", "ب", "ي", "ة"]))]
+    #[case("العربية", Opt::all(), Ok(vec!["ا", "ل", "ع", "ر", "ب", "ي", "ة"]))]
     //
     // Chinese
     #[case("中文", Opt::empty(), Ok(vec!["中", "文"]))]
@@ -417,16 +464,18 @@ mod tests {
     #[case("中文", Opt::all(), Ok(vec!["中", "文"]))]
     //
     // Japanese
-    #[case("日本語", Opt::empty(), Ok(vec!["日本", "語"]))]
-    #[case("日本語", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["日本", "語"]))]
-    #[case("日本語", Opt::SPLIT_HYPHENATED, Ok(vec!["日本", "語"]))]
-    #[case("日本語", Opt::all(), Ok(vec!["日本", "語"]))]
+    #[case("日本語", Opt::empty(), Ok(vec!["日", "本語"]))]
+    #[case("日本語", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["日", "本語"]))]
+    #[case("日本語", Opt::SPLIT_HYPHENATED, Ok(vec!["日", "本語"]))]
+    #[case("日本語", Opt::SHATTER, Ok(vec!["日", "本", "語"]))]
+    #[case("日本語", Opt::all(), Ok(vec!["日", "本", "語"]))]
     //
     // Korean
-    #[case("한국어", Opt::empty(), Ok(vec!["한국", "어"]))]
-    #[case("한국어", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["한국", "어"]))]
-    #[case("한국어", Opt::SPLIT_HYPHENATED, Ok(vec!["한국", "어"]))]
-    #[case("한국어", Opt::all(), Ok(vec!["한국", "어"]))]
+    #[case("한국어", Opt::empty(), Ok(vec!["한", "국어"]))]
+    #[case("한국어", Opt::TRY_TITLECASE_SUFFIX, Ok(vec!["한", "국어"]))]
+    #[case("한국어", Opt::SPLIT_HYPHENATED, Ok(vec!["한", "국어"]))]
+    #[case("한국어", Opt::SHATTER, Ok(vec!["한", "국", "어"]))]
+    #[case("한국어", Opt::all(), Ok(vec!["한", "국", "어"]))]
     //
     // Special characters
     #[case("\n", Opt::empty(), Err(SingleWord("\n".into())))]

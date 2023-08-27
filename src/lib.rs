@@ -146,6 +146,96 @@ bitflags! {
         /// );
         /// ```
         const SPLIT_HYPHENATED = 1 << 1;
+        /// Split into as many constituents as possible. Otherwise, by default, the
+        /// decomposition with the fewest elements is returned, as that is likeliest to
+        /// be most desirable. If your use case disagrees, use this option.
+        ///
+        /// # Example: Word is both a valid single and compound word
+        ///
+        /// ```
+        /// use decompound::{decompound, DecompositionError, DecompositionOptions};
+        ///
+        /// let is_valid_single_word = |w: &str| [
+        ///      // These are regular, valid words,
+        ///      // virtually guaranteed to be in any dictionary:
+        ///     "Entnahme", // "withdrawal"
+        ///     "Stelle", // "spot"
+        ///     "Elle", // "ell"
+        ///     // Not a word in the regular sense, but a plausible occurrence in
+        ///     // dictionaries as an abbreviation for `Sankt` (Saint),
+        ///     // as in `St. Petersburg`. A party pooper in this case...
+        ///     "St",
+        /// ].contains(&w);
+        ///
+        /// let word = "Entnahmestelle";
+        ///
+        /// // Without this option
+        /// assert_eq!(
+        ///     decompound(
+        ///         word,
+        ///         &is_valid_single_word,
+        ///         // Option not relevant to example but required for valid German
+        ///         // handling:
+        ///         DecompositionOptions::TRY_TITLECASE_SUFFIX,
+        ///     ).unwrap(),
+        ///     vec!["Entnahme", "Stelle"]
+        /// );
+        ///
+        /// // With this option
+        /// assert_eq!(
+        ///     decompound(
+        ///         word,
+        ///         &is_valid_single_word,
+        ///        DecompositionOptions::TRY_TITLECASE_SUFFIX
+        ///        | DecompositionOptions::SHATTER,
+        ///    ).unwrap(),
+        ///   // This is *not* the desired outcome for this term,
+        ///   // but it's what this option does:
+        ///   vec!["Entnahme", "St", "Elle"]
+        /// );
+        /// ```
+        ///
+        /// # Example: Greedy prefix matching
+        ///
+        /// ```
+        /// use decompound::{decompound, DecompositionError, DecompositionOptions};
+        ///
+        /// let is_valid_single_word = |w: &str| [
+        ///     "Empfänger",
+        ///     "Empfängers", // genetive might be part of dictionary...
+        ///     "Station",
+        ///     "tat",
+        ///     "Ion",
+        /// ].contains(&w);
+        ///
+        /// let word = "Empfängerstation";
+        ///
+        /// // Without this option
+        /// assert_eq!(
+        ///     decompound(
+        ///         word,
+        ///         &is_valid_single_word,
+        ///         // Option not relevant to example but required for valid German
+        ///         // handling:
+        ///         DecompositionOptions::TRY_TITLECASE_SUFFIX,
+        ///     ).unwrap(),
+        ///     vec!["Empfänger", "Station"]
+        /// );
+        ///
+        /// // With this option
+        /// assert_eq!(
+        ///     decompound(
+        ///         word,
+        ///         &is_valid_single_word,
+        ///        DecompositionOptions::TRY_TITLECASE_SUFFIX
+        ///        | DecompositionOptions::SHATTER,
+        ///    ).unwrap(),
+        ///   // This is *not* the desired outcome for this term,
+        ///   // but it's what this option does:
+        ///   vec!["Empfängers", "tat", "Ion"]
+        /// );
+        /// ```
+        const SHATTER = 1 << 2;
     }
 }
 
@@ -226,29 +316,19 @@ fn is_valid_compound_word(
     let word = word.as_ref();
     trace!("Checking if word is valid compound word: '{}'", word);
 
-    // Greedily fetch the longest possible prefix. Otherwise, we short-circuit and
-    // might end up looking for (for example) "He" of "Heizölrechnung" and its
-    // suffix "izölrechnung" (not a word), whereas we could have found "Heizöl" and
-    // "Rechnung" instead.
-    let greediest_split = {
-        let mut split = None;
+    let mut all_valid_splits = Vec::new();
 
-        for (i, _) in word.char_indices().skip(1) {
-            let (prefix, suffix) = word.split_at(i);
+    for (i, _) in word.char_indices().skip(1) {
+        // Try *all* prefixes, not just the first or longest valid one; they all might
+        // have valid suffixes. Which one to return is decided later.
+        let (prefix, suffix) = word.split_at(i);
 
-            debug_assert!(!prefix.is_empty(), "Prefix should never be empty");
-            debug_assert!(!suffix.is_empty(), "Suffix should never be empty");
+        debug_assert!(!prefix.is_empty(), "Prefix should never be empty");
+        debug_assert!(!suffix.is_empty(), "Suffix should never be empty");
 
-            if is_valid_single_word(prefix) {
-                split = Some((prefix, suffix));
-            }
+        if !is_valid_single_word(prefix) {
+            continue;
         }
-
-        split
-    };
-
-    if let Some((prefix, suffix)) = greediest_split {
-        constituents.push(prefix.to_owned());
 
         trace!(
             "Prefix '{}' found to be valid, seeing if suffix '{}' is valid.",
@@ -273,20 +353,49 @@ fn is_valid_compound_word(
         );
 
         for suffix in suffix_candidates {
-            if is_valid_single_word(&suffix) {
-                trace!("Suffix '{}' is valid: valid single word", suffix);
-                constituents.push(suffix);
-                return true;
+            // EACH of these checks (for readability, organized into blocks) might be
+            // true, so we do not break early, and clone copiously (could be done more
+            // efficiently at substantially higher complexity).
+            //
+            // A word might be *both* a valid single *and* compound word, but which
+            // version is kept depends on `SHATTER`ing.
+
+            {
+                if is_valid_single_word(&suffix) {
+                    trace!("Suffix '{}' is valid: valid single word", suffix);
+                    all_valid_splits.push(vec![prefix.to_owned(), suffix.clone()]);
+                }
             }
 
-            if is_valid_compound_word(&suffix, is_valid_single_word, options, constituents) {
-                trace!("Suffix '{}' is valid: valid compound word", suffix);
-                // Not pushing to constituents, that's already been done in the
-                // recursion step
-                return true;
+            {
+                let mut further_constituents = Vec::new();
+
+                if is_valid_compound_word(
+                    &suffix,
+                    is_valid_single_word,
+                    options,
+                    &mut further_constituents,
+                ) {
+                    trace!("Suffix '{}' is valid: valid compound word", suffix);
+
+                    let mut valid_split = vec![prefix.to_owned()];
+                    valid_split.extend(further_constituents);
+
+                    all_valid_splits.push(valid_split);
+                }
             }
         }
     }
 
-    false
+    match if options.contains(DecompositionOptions::SHATTER) {
+        all_valid_splits.iter().max_by_key(|s| s.len())
+    } else {
+        all_valid_splits.iter().min_by_key(|s| s.len())
+    } {
+        Some(split) => {
+            constituents.extend(split.iter().cloned());
+            true
+        }
+        None => false,
+    }
 }
