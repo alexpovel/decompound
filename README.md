@@ -1,12 +1,13 @@
 # Decompound
 
-Decompose a compound word into its constituent parts. Works in any language, as you
-provide the rules around what constitutes a (*single*) word. The algorithm is
+Split (decompose) a compound word into its constituent parts. Works in any language, as
+you provide the rules around what constitutes a (*single*) word. The algorithm is
 Unicode-aware.
 
 Useful for [culling down existing dictionaries at build time](#motivation).
 
-The docs are best viewed via [docs.rs](https://docs.rs/decompound).
+The docs are best viewed via [docs.rs](https://docs.rs/decompound) (but note those docs
+are tied to releases, so might not be on par with the head of trunk).
 
 [![codecov](https://codecov.io/github/alexpovel/decompound/graph/badge.svg?token=VCCO4HF6MT)](https://codecov.io/github/alexpovel/decompound)[![crates](https://img.shields.io/crates/v/decompound.svg)](https://crates.io/crates/decompound)
 
@@ -55,7 +56,7 @@ assert_eq!(
     decompound(
         "Rübenknollen-Küche",
         &is_valid_single_word,
-        // Wouldn't find anything without titlecasing `boot` to `Boot`,
+        // Wouldn't find anything without titlecasing `knollen` to `Knollen`,
         // and splitting on hyphens.
         DecompositionOptions::SPLIT_HYPHENATED
         | DecompositionOptions::TRY_TITLECASE_SUFFIX
@@ -147,7 +148,9 @@ assert_eq!(
 ```
 
 Match on this variant if this case is not an error in your domain (this crate itself
-does so internally, too).
+[does so
+internally](https://github.com/alexpovel/decompound/blob/b2f4151940c4c55bdb3684c2b74f6336faaf9d2e/src/lib.rs#L187-L190),
+too).
 
 ## Motivation
 
@@ -157,7 +160,9 @@ There is a catch though. As mentioned, this crate can help you move checks for c
 words from static (a fixed dictionary) to runtime ([`decompound`]). For some languages,
 this is strictly *required*, as the set of compound words might be immense, or
 (effectively, not mathematically) unbounded, meaning root words may be combined to
-arbitrary lengths. German is such a case. No dictionary exists to cover all possible
+arbitrary lengths.
+
+German is such a case. No dictionary exists to cover all possible
 German words. However, [existing ones](https://sourceforge.net/projects/germandict/) are
 almost guaranteed to themselves contain *some* compound words (which is generally
 helpful). When using such dictionaries *and* this crate to cover all remaining,
@@ -167,14 +172,23 @@ runtime instead (providing a single source of truth along the way).
 
 Culling the dictionary might lead to significant, [perhaps
 necessary](https://github.com/rust-lang/crates.io/issues/195) savings in size (memory
-and executable), so a [build
-script](https://doc.rust-lang.org/cargo/reference/build-scripts.html) is needed. But
-now, *both* the actual code *and* the [build script
-depend](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#build-dependencies)
-on that same detection algorithm. If what you cull the dictionary with gets out of sync
-with what's done at runtime, bugs arise. The build script cannot depend on what it's
-building. Currently (2023-08-19), **there is no place for the compound check to live
-except another crate**, external to both the build script and actual code. That's this
-crate. It affords a **non-cyclic build graph**, a single source of truth for the
-compound check and affords the usage of *any* dictionary, no out-of-band preprocessing
-necessary (the original dictionary can be kept).
+and executable). For culling, a [build
+script](https://doc.rust-lang.org/cargo/reference/build-scripts.html) is needed.
+However, now both the code being built *and* the build script
+[depend](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#build-dependencies)
+on that same detection algorithm. Where does *it* live?
+
+- The build script cannot depend on what it's building. Therefore, the algorithm cannot
+  live inside the crate under construction.
+- The temptation of copy-pasting it into the build script arises. However, if what the
+  dictionary is being culled with with gets out of sync with what's done at runtime,
+  bugs arise. Maintainability suffers. Therefore, duplicating the algorithm is not an
+  option.
+- Currently (2023-08-19), **there is no place for the check to live except another
+  crate**, external to both the build script and actual code. **That's this crate.** It
+  affords:
+
+  - a **non-cyclic build graph**,
+  - a single source of truth for the algorithm,
+  - usage of *any* dictionary, no out-of-band preprocessing necessary (the original
+  dictionary can be kept).
